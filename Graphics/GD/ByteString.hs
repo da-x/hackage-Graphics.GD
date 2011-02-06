@@ -40,7 +40,7 @@ module Graphics.GD.ByteString (
                     measureString,
                     drawStringCircle,
                     -- * Colors
-                    GD.rgb, GD.rgba
+                    GD.rgb, GD.rgba, GD.toRGBA
                    ) where
 
 import           Graphics.GD.Internal     (Point,Color,Image,GDImage,CFILE,Size)

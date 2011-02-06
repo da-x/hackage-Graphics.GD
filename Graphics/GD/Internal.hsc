@@ -2,9 +2,10 @@ module Graphics.GD.Internal where
 
 import           Control.Exception (bracket)
 import           Control.Monad     (liftM, unless)
+import           Data.Bits
 import           Foreign           (Ptr,FunPtr,ForeignPtr)
+import           Foreign           (peek,peekByteOff)
 import qualified Foreign           as F
-import           Foreign           (peek,peekByteOff,(.|.))
 import           Foreign.C         (CDouble,CInt,CString)
 import qualified Foreign.C         as C
 
@@ -371,6 +372,15 @@ rgba r g b a =
     (int r `F.shiftL` 16) .|.
     (int g `F.shiftL` 8)  .|.
     int b
+    
+toRGBA :: Color -> (Int, Int, Int, Int) 
+toRGBA c = (fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a)
+ where
+   b = c `mod` byte
+   g = shiftR c 8 `mod` byte
+   r = shiftR c 16 `mod` byte
+   a = shiftR c 24 `mod` byte
+   byte = 2 ^ (8::Int)
 
 --
 -- * Text

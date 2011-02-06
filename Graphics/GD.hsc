@@ -1,3 +1,4 @@
+{-# LANGUAGE EmptyDataDecls #-}
 module Graphics.GD (
                     -- * Types
                     Image, Size, Point, Color,
@@ -32,32 +33,29 @@ module Graphics.GD (
                     drawArc,
                     antiAliased,
                     setPixel,
-                    -- * Query
-                    getPixel,
                     -- * Text
                     useFontConfig,
                     drawString, measureString,
                     drawStringCircle,
                     -- * Colors
-                    rgb,
-                    rgba,
-                    alpha,
-                    red,
-                    green,
-                    blue
+                    rgb, rgba, toRGBA,
+                    -- * Misc
+                    saveAlpha,
+                    alphaBlending,
+
                    ) where
 
 import           Control.Exception        (bracket)
 import           Control.Monad            (liftM, unless)
+import           Data.Bits
 import qualified Data.ByteString.Internal as B
 import           Foreign                  (Ptr,FunPtr,ForeignPtr)
 import           Foreign                  (peekByteOff)
 import qualified Foreign                  as F
-import           Foreign                  ((.|.))
 import           Foreign.C                (CInt,CString,CDouble)
 import qualified Foreign.C                as C
 
-data CFILE = CFILE
+data CFILE
 
 foreign import ccall "stdio.h fopen" c_fopen
     :: CString -> CString -> IO (Ptr CFILE)
@@ -78,7 +76,7 @@ withCFILE file mode = bracket (fopen file mode) fclose
 #include <gd.h>
 #include "gd-extras.h"
 
-data GDImage = GDImage
+data GDImage
 
 -- JPEG format
 
@@ -181,11 +179,6 @@ foreign import ccall "gd.h gdImageSetAntiAliased" gdImageSetAntiAliased
 foreign import ccall "gd.h gdImageSetPixel" gdImageSetPixel
     :: Ptr GDImage -> CInt -> CInt -> CInt -> IO ()
 
--- Query functions
-
-foreign import ccall "gd.h gdImageGetPixel" gdImageGetPixel
-    :: Ptr GDImage -> CInt -> CInt -> IO CInt
-
 -- Text functions
 
 foreign import ccall "gd.h gdFTUseFontConfig" gdFTUseFontConfig
@@ -203,6 +196,21 @@ foreign import ccall "gd.h gdImageStringFTCircle" gdImageStringFTCircle
 
 foreign import ccall "gd.h &gdFree" gdFree
     :: FunPtr (Ptr a -> IO ())
+    
+toRGBA :: Color -> (Int, Int, Int, Int) 
+toRGBA c = (fromIntegral r, fromIntegral g, fromIntegral b, fromIntegral a)
+ where
+   b = c `mod` byte
+   g = shiftR c 8 `mod` byte
+   r = shiftR c 16 `mod` byte
+   a = shiftR c 24 `mod` byte
+   byte = 2 ^ (8::Int)
+
+foreign import ccall "gd.h gdImageSaveAlpha" gdImageSaveAlpha
+    :: Ptr GDImage -> CInt -> IO ()
+
+foreign import ccall "gd.h gdImageAlphaBlending" gdImageAlphaBlending
+    :: Ptr GDImage -> CInt -> IO ()
 
 -- We use a second level of indirection to allow storing a null pointer
 -- when the image has already been freed. This allows 'withImage' to 
@@ -503,16 +511,6 @@ setPixel (x,y) c i =
         gdImageSetPixel p (int x) (int y) c
 
 --
--- * Query
---
-
--- | Retrieve the color of a pixel
-getPixel :: Point -> Image -> IO Color
-getPixel (x,y) i =
-    do withImagePtr i $ \p ->
-        gdImageGetPixel p (int x) (int y)
-
---
 -- * Text
 --
 
@@ -593,6 +591,12 @@ drawStringCircle (ctrX, ctrY) rad textRad textFill fontName
                    cTopTxt cBottomTxt  color                    
         unless (res == F.nullPtr) (C.peekCAString res >>= ioError . userError)
 
+saveAlpha :: Bool -> Image -> IO ()
+saveAlpha b i = withImagePtr i $ \p -> gdImageSaveAlpha p $ if b then 1 else 0
+
+alphaBlending :: Bool -> Image -> IO ()
+alphaBlending b i = withImagePtr i $ \p -> gdImageAlphaBlending p $ if b then 1 else 0
+
 --
 -- * Colors
 --
@@ -614,21 +618,6 @@ rgba r g b a =
     (int g `F.shiftL` 8)  .|.
     int b
 
--- | Extract the alpha component of a color
-alpha :: Color -> Int
-alpha c = int $ (c `F.shiftR` 24) F..&. 0x7f
-
--- | Extract the red component of a color
-red :: Color -> Int
-red c = int $ (c `F.shiftR` 16) F..&. 0xff
-
--- | Extract the green component of a color
-green :: Color -> Int
-green c = int $ (c `F.shiftR` 8) F..&. 0xff
-
--- | Extract the blue component of a color
-blue :: Color -> Int
-blue c = int $ c F..&. 0xff
 
 --
 -- * Utilities
