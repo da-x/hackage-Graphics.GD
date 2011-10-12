@@ -25,6 +25,7 @@ module Graphics.GD (
                     imageSize,
                     -- * Manipulating images
                     resizeImage, rotateImage,
+                    resizeAlphaImage,
                     -- * Drawing
                     fillImage,
                     drawFilledRectangle,
@@ -211,6 +212,9 @@ foreign import ccall "gd.h gdImageSaveAlpha" gdImageSaveAlpha
 
 foreign import ccall "gd.h gdImageAlphaBlending" gdImageAlphaBlending
     :: Ptr GDImage -> CInt -> IO ()
+
+foreign import ccall "gd.h gdImageColorAllocateAlpha" gdImageColorAllocateAlpha
+    :: Ptr GDImage -> CInt -> CInt -> CInt -> CInt -> IO CInt
 
 -- We use a second level of indirection to allow storing a null pointer
 -- when the image has already been freed. This allows 'withImage' to 
@@ -441,7 +445,21 @@ resizeImage w h i = withImagePtr i f
     where 
       f p = do let (outW,outH) = (fromIntegral w, fromIntegral h)
                (inW, inH) <- imageSize_ p
-               onNewImage outW outH $ \p' -> 
+               onNewImage outW outH $ \p' -> gdImageCopyResampled p' p 0 0 0 0 outW outH inW inH
+
+resizeAlphaImage :: Int -- ^ width in pixels of output image
+                    -> Int -- ^ height in pixels of output image
+                    -> Image 
+                    -> IO Image
+resizeAlphaImage w h i = withImagePtr i f
+    where 
+      f p = do let (outW,outH) = (fromIntegral w, fromIntegral h)
+               (inW, inH) <- imageSize_ p
+               onNewImage outW outH $ \p' -> do
+                   gdImageAlphaBlending p' 0
+                   gdImageSaveAlpha p' 1
+                   transparent <- gdImageColorAllocateAlpha p' 255 255 255 127
+                   gdImageFilledRectangle p' 0 0 outW outH transparent
                    gdImageCopyResampled p' p 0 0 0 0 outW outH inW inH
 
 -- | Rotate an image by a multiple of 90 degrees counter-clockwise.
